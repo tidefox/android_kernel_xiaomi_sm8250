@@ -65,9 +65,13 @@ jobs:
         run: |
           mkdir -p ../dist
           B=out/arch/arm64/boot
-          cp $B/Image $B/Image.gz ../dist/
-          cat $B/dts/vendor/qcom/kona*.dtb > ../dist/dtb
-          cp $B/dts/vendor/qcom/${DEVICE}-sm8250-overlay.dtbo ../dist/ || true
+          ls -l $B
+          cp $B/Image ../dist/
+          if [ -f $B/Image.gz ]; then cp $B/Image.gz ../dist/; else gzip -9 -c $B/Image > ../dist/Image.gz; fi
+          find out/arch/arm64/boot/dts -name 'kona*.dtb' | sort | tee ../dist/dtb.list
+          find out/arch/arm64/boot/dts -name 'kona*.dtb' | sort | xargs cat > ../dist/dtb
+          find out/arch/arm64/boot/dts -name "${DEVICE}-sm8250-overlay.dtbo" -exec cp {} ../dist/ \;
+          find out -name '*.ko' -exec cp {} ../dist/ \;
           echo "SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
 
       - name: Package AnyKernel3
@@ -131,6 +135,8 @@ jobs:
             dist/Image.gz
             dist/dtb
             dist/*.dtbo
+            dist/dtb.list
+            dist/*.ko
       - uses: actions/upload-artifact@v4
         with:
           name: anykernel3-${{ env.DEVICE }}
