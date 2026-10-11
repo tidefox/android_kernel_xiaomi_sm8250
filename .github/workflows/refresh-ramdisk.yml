@@ -1,0 +1,53 @@
+name: refresh-ramdisk
+
+# Extracts the ramdisk from a new stock PixelOS boot.img and commits it to the
+# boot-assets branch. Run this when a new ROM release comes out.
+on:
+  workflow_dispatch:
+    inputs:
+      boot_url:
+        description: "https://download.pixelos.net/.../boot-alioth_YYYYMMDD_HHMM.img"
+        required: true
+
+concurrency:
+  group: refresh-ramdisk
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          path: ci
+      - uses: actions/checkout@v4
+        with:
+          ref: boot-assets
+          path: assets
+
+      - name: Extract ramdisk
+        env:
+          BOOT_URL: ${{ inputs.boot_url }}
+        run: |
+          case "$BOOT_URL" in
+            https://download.pixelos.net/*|https://bucket.pixelos.net/*) ;;
+            *) echo "boot_url must be on download.pixelos.net or bucket.pixelos.net" >&2; exit 1 ;;
+          esac
+          ci/ci/fetch_tools.sh "$PWD/tools"
+          curl -fsSL --retry 3 -o stock.img "$BOOT_URL"
+          python3 ci/ci/refresh_ramdisk.py --img stock.img --url "$BOOT_URL" \
+            --assets assets --tools tools
+
+      - name: Commit to boot-assets
+        working-directory: assets
+        run: |
+          STAMP=$(cat alioth/latest)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add alioth
+          git commit -s -m "alioth: add ramdisk from PixelOS ${STAMP}" \
+            -m "Source: ${{ inputs.boot_url }}"
+          git push origin HEAD:boot-assets

@@ -1,0 +1,141 @@
+name: build-alioth
+
+# Lives on the default branch so it can be dispatched from the Actions tab;
+# it builds whichever kernel branch is given in `ref`.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Kernel branch to build"
+        required: true
+        default: seventeen-nomount
+      rom_stamp:
+        description: "boot-assets ramdisk to use, e.g. 20260922_1500 (default: latest)"
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  ARCH: arm64
+  DEVICE: alioth
+  DEFCONFIG: vendor/kona-perf_defconfig
+  FRAGMENTS: vendor/xiaomi/sm8250-common.config vendor/xiaomi/alioth.config
+
+jobs:
+  kernel:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 1
+          path: kernel
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          path: ci
+      - uses: actions/checkout@v4
+        with:
+          ref: boot-assets
+          fetch-depth: 1
+          path: assets
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison flex libssl-dev libelf-dev zip cpio python3 \
+            clang-14 lld-14 llvm-14 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+          ci/ci/fetch_tools.sh "$PWD/tools"
+
+      - name: Build kernel (ThinLTO)
+        working-directory: kernel
+        run: |
+          export PATH=/usr/lib/llvm-14/bin:$PATH
+          MAKE_ARGS="O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang \
+            CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
+          make $MAKE_ARGS $DEFCONFIG $FRAGMENTS
+          grep -E "CONFIG_(NOMOUNT|LTO_CLANG|THINLTO|MACH_XIAOMI_ALIOTH)=" out/.config
+          make $MAKE_ARGS -j"$(nproc)"
+
+      - name: Collect outputs
+        working-directory: kernel
+        run: |
+          mkdir -p ../dist
+          B=out/arch/arm64/boot
+          cp $B/Image $B/Image.gz ../dist/
+          cat $B/dts/vendor/qcom/kona*.dtb > ../dist/dtb
+          cp $B/dts/vendor/qcom/${DEVICE}-sm8250-overlay.dtbo ../dist/ || true
+          echo "SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Package AnyKernel3
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 ak3
+          rm -rf ak3/.git ak3/.github ak3/README.md ak3/modules ak3/patch ak3/ramdisk
+          cat > ak3/anykernel.sh <<'AKEOF'
+          ### AnyKernel3 Ramdisk Mod Script
+          properties() { '
+          kernel.string=SM8250 kernel (alioth)
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=0
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=alioth
+          device.name2=aliothin
+          device.name3=
+          device.name4=
+          device.name5=
+          supported.versions=
+          supported.patchlevels=
+          supported.vendorpatchlevels=
+          '; }
+
+          BLOCK=boot;
+          IS_SLOT_DEVICE=auto;
+          RAMDISK_COMPRESSION=auto;
+          PATCH_VBMETA_FLAG=auto;
+
+          . tools/ak3-core.sh;
+
+          dump_boot;
+          write_boot;
+          AKEOF
+          # header v3 boot images carry no dtb, so only the kernel goes in the zip
+          cp dist/Image.gz ak3/
+          (cd ak3 && zip -r9 "../dist/AK3-${DEVICE}-${SHA}.zip" . -x '*.git*')
+
+      - name: Build boot.img
+        run: |
+          python3 ci/ci/make_boot.py --assets assets --device "$DEVICE" \
+            ${{ inputs.rom_stamp && format('--stamp {0}', inputs.rom_stamp) || '' }} \
+            --kernel dist/Image --tools tools --out dist/boot.img | tee boot.log
+          PATCH=$(python3 - <<'PY'
+          import json,pathlib
+          a=pathlib.Path("assets/alioth")
+          s="${{ inputs.rom_stamp }}" or (a/"latest").read_text().strip()
+          m=json.loads((a/s/"MANIFEST.json").read_text())
+          print(f"{s}-pl{m['boot']['os_patch_level']}")
+          PY
+          )
+          mv dist/boot.img "dist/boot-${DEVICE}-${SHA}-rom${PATCH}.img"
+          echo "::notice::boot.img uses ramdisk/patch level ${PATCH}; it must not be older than the ROM you run (rollback protection)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kernel-image-${{ env.DEVICE }}
+          path: |
+            dist/Image
+            dist/Image.gz
+            dist/dtb
+            dist/*.dtbo
+      - uses: actions/upload-artifact@v4
+        with:
+          name: anykernel3-${{ env.DEVICE }}
+          path: dist/AK3-*.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: boot-image-${{ env.DEVICE }}
+          path: dist/boot-*.img
