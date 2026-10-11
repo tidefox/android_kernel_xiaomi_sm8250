@@ -4,6 +4,10 @@ on:
   push:
     branches: [seventeen, seventeen-nomount]
   workflow_dispatch:
+    inputs:
+      boot_url:
+        description: "Stock boot.img URL (overrides vars.BOOT_IMG_URL)"
+        required: false
 
 env:
   ARCH: arm64
@@ -93,3 +97,31 @@ jobs:
         with:
           name: anykernel3-${{ env.DEVICE }}
           path: dist/AK3-*.zip
+
+      # Repack the stock ROM boot.img (header v3: kernel + ramdisk, no dtb) with
+      # our raw Image. Needs the stock image URL, which rotates on each ROM release:
+      # set it as repo variable BOOT_IMG_URL or pass boot_url when dispatching.
+      - name: Repack boot.img (magiskboot)
+        env:
+          BOOT_URL: ${{ inputs.boot_url || vars.BOOT_IMG_URL }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$BOOT_URL" ]; then
+            echo "No BOOT_IMG_URL / boot_url set, skipping boot.img repack"
+            exit 0
+          fi
+          mkdir -p mb && cd mb
+          gh release download -R topjohnwu/Magisk -p 'Magisk-v*.apk'
+          unzip -o -q Magisk-v*.apk lib/x86_64/libmagiskboot.so
+          install -m755 lib/x86_64/libmagiskboot.so magiskboot
+          curl -fsSL --retry 3 -o stock.img "$BOOT_URL"
+          ./magiskboot unpack stock.img
+          cp ../dist/Image kernel
+          ./magiskboot repack stock.img boot-alioth.img
+          cp boot-alioth.img ../dist/boot-alioth-$(git -C .. rev-parse --short HEAD).img
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: boot-image-${{ env.DEVICE }}
+          path: dist/boot-alioth-*.img
+          if-no-files-found: ignore
