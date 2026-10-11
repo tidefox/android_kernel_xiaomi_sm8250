@@ -1,5 +1,18 @@
 # Fork notes: android_kernel_xiaomi_sm8250 (alioth)
 
+> [!IMPORTANT]
+> ### Statement from this fork maintainer
+>
+> **No AI was used to write or modify the kernel source code in this repository on my part.**
+> Every kernel source change I have authored was written, reviewed and tested by me, a human.
+>
+> AI tooling has only been used, if at all, for supporting material outside the kernel source,
+> such as CI configuration and documentation text. Those changes are reviewed by me before they land.
+>
+> AI tooling and agent **are allowed, only under human supervision**.
+
+---
+
 This is a fork of [PixelOS-Devices/android_kernel_xiaomi_sm8250](https://github.com/PixelOS-Devices/android_kernel_xiaomi_sm8250).
 
 | Branch | What it is |
