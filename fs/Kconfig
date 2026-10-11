@@ -41,6 +41,9 @@ source "fs/btrfs/Kconfig"
 source "fs/nilfs2/Kconfig"
 source "fs/f2fs/Kconfig"
 
+# nomount patch
+source "fs/nomount/Kconfig"
+
 config FS_DAX
 	bool "Direct Access (DAX) support"
 	depends on MMU
