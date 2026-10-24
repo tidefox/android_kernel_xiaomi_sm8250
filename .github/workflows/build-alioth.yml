@@ -112,20 +112,26 @@ jobs:
           (cd ak3 && zip -r9 "../dist/AK3-${DEVICE}-${SHA}.zip" . -x '*.git*')
 
       - name: Build boot.img
+        env:
+          REF: ${{ inputs.ref }}
         run: |
           python3 ci/ci/make_boot.py --assets assets --device "$DEVICE" \
             ${{ inputs.rom_stamp && format('--stamp {0}', inputs.rom_stamp) || '' }} \
             --kernel dist/Image --tools tools --out dist/boot.img | tee boot.log
-          PATCH=$(python3 - <<'PY'
+          # e.g. boot-alioth_20261024_0345-pl2026-10
+          ORIGIN=$(python3 - <<'PY'
           import json,pathlib
           a=pathlib.Path("assets/alioth")
           s="${{ inputs.rom_stamp }}" or (a/"latest").read_text().strip()
           m=json.loads((a/s/"MANIFEST.json").read_text())
-          print(f"{s}-pl{m['boot']['os_patch_level']}")
+          print(f"{pathlib.Path(m['source']['filename']).stem}-pl{m['boot']['os_patch_level']}")
           PY
           )
-          mv dist/boot.img "dist/boot-${DEVICE}-${SHA}-rom${PATCH}.img"
-          echo "::notice::boot.img uses ramdisk/patch level ${PATCH}; it must not be older than the ROM you run (rollback protection)"
+          # <stock image it was repacked from>-to-<kernel branch>-<sha>
+          NAME="${ORIGIN}-to-${REF//\//-}-${SHA}"
+          mv dist/boot.img "dist/${NAME}.img"
+          echo "BOOT_NAME=${NAME}" >> "$GITHUB_ENV"
+          echo "::notice::${NAME}.img: the ROM you run must not be newer than this stock image (rollback protection)"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -143,5 +149,5 @@ jobs:
           path: dist/AK3-*.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: boot-image-${{ env.DEVICE }}
-          path: dist/boot-*.img
+          name: ${{ env.BOOT_NAME }}
+          path: dist/${{ env.BOOT_NAME }}.img
