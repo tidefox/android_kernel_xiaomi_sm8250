@@ -1,0 +1,37 @@
+{
+  "device": "alioth",
+  "rom": "PixelOS",
+  "rom_stamp": "20261024_0345",
+  "source": {
+    "url": "https://download.pixelos.net/seventeen/alioth/recovery/boot-alioth_20261024_0345.img",
+    "filename": "boot-alioth_20261024_0345.img",
+    "size": 201326592,
+    "sha256": "b035e911ba40981cf76277d46d8df202f8e6740d35f814f76e442cae59d33fdc"
+  },
+  "boot": {
+    "header_version": 3,
+    "os_version": "17.0.0",
+    "os_patch_level": "2026-10",
+    "cmdline": "",
+    "partition_size": 201326592
+  },
+  "ramdisk": {
+    "file": "ramdisk.img",
+    "format": "gzip",
+    "size": 1361441,
+    "sha256": "a8ebe1182b7ef80a4c944f29ddb7d687ef09e5dc641c28b8796325f01a805d33"
+  },
+  "avb": {
+    "algorithm": "NONE",
+    "props": {
+      "com.android.build.boot.os_version": "17",
+      "com.android.build.boot.fingerprint": "POCO/custom_alioth/alioth:17/CP2A.260605.016/eng.ci:user/release-keys"
+    }
+  },
+  "tools": {
+    "magiskboot": "Magisk v30.7",
+    "mkbootimg_commit": "d2bb0af5ba6d3198a3e99529c97eda1be0b5a093",
+    "avbtool_commit": "761178607206f4cb2af79ed9eec52d8cbd814adb"
+  },
+  "extracted_at": "2026-10-24T19:08:13Z"
+}
