@@ -24,7 +24,7 @@ env:
 
 jobs:
   kernel:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
         with:
@@ -47,13 +47,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             bc bison flex libssl-dev libelf-dev zip cpio python3 \
-            clang-14 lld-14 llvm-14 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+            clang-18 lld-18 llvm-18 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
           ci/ci/fetch_tools.sh "$PWD/tools"
 
       - name: Build kernel (ThinLTO)
         working-directory: kernel
         run: |
-          export PATH=/usr/lib/llvm-14/bin:$PATH
+          export PATH=/usr/lib/llvm-18/bin:$PATH
           MAKE_ARGS="O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang \
             CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
           make $MAKE_ARGS $DEFCONFIG $FRAGMENTS
